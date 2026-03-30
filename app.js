@@ -200,6 +200,14 @@ function cutoffDate(days) {
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
 }
+function formatTime12h(timeStr) {
+  if (!timeStr) return '';
+  let [h, m] = timeStr.split(':');
+  h = parseInt(h);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+}
 
 // ────────────────────────────────────────────
 //  Screen helpers
@@ -332,7 +340,7 @@ function renderRoleScreen() {
           <span style="margin-left:auto;color:var(--txt-muted);font-size:20px;">›</span>
         </div>
         <div class="role-card" id="btn-doctor" tabindex="0" role="button">
-          <div class="role-icon doctor">🩻</div>
+          <div class="role-icon doctor">👨‍⚕️</div>
           <div class="role-info">
             <h3>Doctor</h3>
             <p>Full access – prescribe medicines, edit records</p>
@@ -445,9 +453,11 @@ function renderDashboard(role) {
 
   const isDoctor    = role === 'doctor';
   const isCaretaker = role === 'caretaker';
+  const isPatient   = role === 'patient';
   const roleLabel   = { patient: 'Patient', caretaker: 'Care Taker', doctor: 'Doctor' }[role];
   const photo       = currentUser?.photoURL;
   const initials    = (currentUser?.displayName || 'U').charAt(0).toUpperCase();
+
   const avatarHtml  = photo
     ? `<img src="${escHtml(photo)}" class="user-avatar" alt="avatar" />`
     : `<div class="user-avatar-placeholder">${initials}</div>`;
@@ -455,6 +465,115 @@ function renderDashboard(role) {
   const dashEl = document.createElement('section');
   dashEl.id = 'dashboard-screen';
   dashEl.className = 'screen dashboard';
+
+  let dashContent = '';
+
+  if (isPatient || isCaretaker) {
+    dashContent += `
+      <!-- Water Intake Tracker -->
+      <div class="card water-tracker-card" style="box-shadow: 0 4px 15px rgba(14,165,233,0.12); border-top: 4px solid var(--accent);">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">💧</span> Water Intake – Today</span>
+          ${isCaretaker ? `<button class="btn btn-icon" id="btn-set-water-target" title="Set Target">🎯</button>` : `<button class="btn btn-icon hidden" id="btn-set-water-target" title="Set Target">🎯</button>`}
+        </div>
+        <div id="water-content">
+           <div class="spinner" style="margin:20px auto;"></div>
+        </div>
+      </div>
+      
+      <!-- Medicine Reminder -->
+      <div class="card medicine-reminder-card" style="box-shadow: 0 4px 15px rgba(239,68,68,0.1); border-top: 4px solid var(--primary);">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">💊</span> Medicine Reminder</span>
+        </div>
+        <div id="medicine-reminder-content">
+          <div class="spinner" style="margin:20px auto;"></div>
+        </div>
+      </div>
+      
+      <!-- Food Plan -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">🥗</span> Food Plan – Today</span>
+          ${isCaretaker ? `<button class="btn btn-icon" id="btn-edit-food" title="Edit Food">✏️</button>` : ''}
+        </div>
+        <div id="food-content"><div class="spinner" style="margin:20px auto;"></div></div>
+      </div>
+
+       <!-- Snacks -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">🍎</span> Snacks – Today</span>
+          ${isCaretaker ? `<button class="btn btn-icon" id="btn-add-snack" title="Add Snack">＋</button>` : ''}
+        </div>
+        <div id="snack-list-wrap"><div class="spinner" style="margin:20px auto;"></div></div>
+      </div>
+      
+      <!-- Reminder Settings (Patient) -->
+      ${isPatient ? `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">⏰</span> Reminder Settings</span>
+        </div>
+        <div class="reminder-card">
+          <span class="reminder-icon">🔔</span>
+          <div class="reminder-text">
+            <h4>Medicine &amp; Water Reminders</h4>
+            <p>Reminders are managed by your care team. Notifications will appear based on set intervals.</p>
+          </div>
+        </div>
+      </div>` : ''}
+    `;
+  }
+
+  if (isDoctor) {
+    dashContent += `
+      <!-- Blood Sugar (Doctor Only) -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">📊</span> Patient Blood Sugar</span>
+          <button class="btn btn-icon" id="btn-add-bs" title="Log Blood Sugar">＋</button>
+        </div>
+        <div class="chart-wrap"><canvas id="bs-chart"></canvas></div>
+        <div id="bs-form" style="display:none;flex-wrap:wrap;gap:8px;margin-top:12px;">
+          <div class="input-group" style="flex:1;min-width:120px;margin-bottom:0">
+            <input type="number" id="bs-value" placeholder="Value mg/dL" min="1" max="1000" />
+          </div>
+          <div class="input-group" style="width:130px;margin-bottom:0">
+            <input type="text" id="bs-type" placeholder="Type (fasting…)" />
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-save-bs">Save</button>
+        </div>
+      </div>
+
+      <!-- Doctor PIN update -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">🔐</span> Update Doctor PIN</span>
+        </div>
+        <p class="section-sub">Change your unique PIN used to access the doctor dashboard.</p>
+        <div class="pin-section">
+          <div class="input-group" style="flex:1;min-width:150px;margin-bottom:0">
+            <input type="password" id="new-pin-input" placeholder="New PIN" maxlength="20" autocomplete="new-password" />
+          </div>
+          <div class="input-group" style="flex:1;min-width:150px;margin-bottom:0">
+            <input type="password" id="confirm-pin-input" placeholder="Confirm PIN" maxlength="20" autocomplete="new-password" />
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-save-pin">Update PIN</button>
+        </div>
+        <span class="error-msg" id="pin-update-error" style="display:none;margin-top:8px;"></span>
+      </div>
+
+      <!-- Medicines (Doctor Only) -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">💊</span> Patient Medicines</span>
+          <button class="btn btn-icon" id="btn-add-med" title="Add Medicine">＋</button>
+        </div>
+        <div id="medicine-list-wrap"><div class="spinner" style="margin:20px auto;"></div></div>
+      </div>
+    `;
+  }
 
   dashEl.innerHTML = `
     <nav class="topbar">
@@ -471,100 +590,8 @@ function renderDashboard(role) {
         <button class="logout-btn" id="logout-btn">⏻ Logout</button>
       </div>
     </nav>
-
     <div class="dashboard-content">
-
-      <!-- Blood Sugar -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">📊</span>
-            ${isDoctor ? '3-Month' : '1-Month'} Blood Sugar Progress
-          </span>
-          ${isDoctor ? `<button class="btn btn-icon" id="btn-add-bs" title="Log Blood Sugar">＋</button>` : ''}
-        </div>
-        <div class="chart-wrap"><canvas id="bs-chart"></canvas></div>
-        ${isDoctor ? `
-        <div id="bs-form" style="display:none;flex-wrap:wrap;gap:8px;margin-top:12px;">
-          <div class="input-group" style="flex:1;min-width:120px;margin-bottom:0">
-            <input type="number" id="bs-value" placeholder="Value mg/dL" min="1" max="1000" />
-          </div>
-          <div class="input-group" style="width:130px;margin-bottom:0">
-            <input type="text" id="bs-type" placeholder="Type (fasting…)" />
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-save-bs">Save</button>
-        </div>` : ''}
-      </div>
-
-      <!-- Doctor PIN update (Doctor only) -->
-      ${isDoctor ? `
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">🔐</span> Update Doctor PIN</span>
-        </div>
-        <p class="section-sub">Change your unique PIN used to access the doctor dashboard.</p>
-        <div class="pin-section">
-          <div class="input-group" style="flex:1;min-width:150px;margin-bottom:0">
-            <input type="password" id="new-pin-input" placeholder="New PIN" maxlength="20" autocomplete="new-password" />
-          </div>
-          <div class="input-group" style="flex:1;min-width:150px;margin-bottom:0">
-            <input type="password" id="confirm-pin-input" placeholder="Confirm PIN" maxlength="20" autocomplete="new-password" />
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-save-pin">Update PIN</button>
-        </div>
-        <span class="error-msg" id="pin-update-error" style="display:none;margin-top:8px;"></span>
-      </div>` : ''}
-
-      <!-- Medicines -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">💊</span> Medicines</span>
-          ${isDoctor ? `<button class="btn btn-icon" id="btn-add-med" title="Add Medicine">＋</button>` : ''}
-        </div>
-        <div id="medicine-list-wrap"></div>
-      </div>
-
-      <!-- Food Plan -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">🥗</span> Food Plan – Today</span>
-          ${(isDoctor || isCaretaker) ? `<button class="btn btn-icon" id="btn-edit-food" title="Edit Food">✏️</button>` : ''}
-        </div>
-        <div id="food-content"></div>
-      </div>
-
-      <!-- Snacks -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">🍎</span> Snacks – Today</span>
-          ${(isDoctor || isCaretaker) ? `<button class="btn btn-icon" id="btn-add-snack" title="Add Snack">＋</button>` : ''}
-        </div>
-        <div id="snack-list-wrap"></div>
-      </div>
-
-      <!-- Water Intake -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">💧</span> Water Intake – Today</span>
-          ${(isDoctor || isCaretaker) ? `<button class="btn btn-icon" id="btn-set-water-target" title="Set Target">🎯</button>` : ''}
-        </div>
-        <div id="water-content"></div>
-      </div>
-
-      <!-- Reminder Settings (Patient) -->
-      ${role === 'patient' ? `
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">⏰</span> Reminder Settings</span>
-        </div>
-        <div class="reminder-card">
-          <span class="reminder-icon">🔔</span>
-          <div class="reminder-text">
-            <h4>Medicine &amp; Water Reminders</h4>
-            <p>Reminders are managed by your care team. Your doctor schedules medicines and your care taker logs water &amp; food intake. Notifications will appear based on set intervals.</p>
-          </div>
-        </div>
-      </div>` : ''}
-
+      ${dashContent}
     </div>`;
 
   app.appendChild(dashEl);
@@ -669,34 +696,93 @@ function startRealtimeListeners(role) {
 // ════════════════════════════════════════════
 
 function renderMedicines(meds, role) {
-  const wrap = document.getElementById('medicine-list-wrap');
-  if (!wrap) return;
   const isDoctor = role === 'doctor';
-  if (meds.length === 0) {
-    wrap.innerHTML = '<p class="empty-state">No medicines prescribed yet.</p>';
-    return;
-  }
-  wrap.innerHTML = `<div class="medicine-list">
-    ${meds.map(m => `
-      <div class="medicine-item" data-id="${escHtml(m.id)}">
-        <div class="medicine-dot"></div>
-        <div class="medicine-info">
-          <div class="med-name">${escHtml(m.name)}</div>
-          <div class="med-detail">${escHtml(m.dosage)} &bull; at ${escHtml(m.time)}</div>
-          ${m.prescribedByDoctor ? '<span class="prescribed-badge">Prescribed by Doctor</span>' : ''}
-        </div>
-        ${isDoctor ? `<button class="medicine-delete" data-id="${escHtml(m.id)}" title="Remove">🗑</button>` : ''}
-      </div>`).join('')}
-  </div>`;
 
   if (isDoctor) {
+    const wrap = document.getElementById('medicine-list-wrap');
+    if (!wrap) return;
+    if (meds.length === 0) {
+      wrap.innerHTML = '<p class="empty-state">No medicines prescribed yet.</p>';
+      return;
+    }
+    wrap.innerHTML = `<div class="medicine-list">
+      ${meds.map(m => `
+        <div class="medicine-item" data-id="${escHtml(m.id)}">
+          <div class="medicine-dot"></div>
+          <div class="medicine-info">
+            <div class="med-name">${escHtml(m.name)}</div>
+            <div class="med-detail">${escHtml(m.dosage)} &bull; at ${formatTime12h(m.time)}</div>
+            ${m.prescribedByDoctor ? '<span class="prescribed-badge">Prescribed</span>' : ''}
+          </div>
+          <button class="medicine-delete" data-id="${escHtml(m.id)}" title="Remove">🗑</button>
+        </div>`).join('')}
+    </div>`;
+
     wrap.querySelectorAll('.medicine-delete').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        try {
-          await col('medicines').doc(btn.dataset.id).delete();
-          toast('Medicine removed.', 'info');
-        } catch { toast('Failed to remove.', 'error'); }
+      btn.addEventListener('click', () => {
+        col('medicines').doc(btn.dataset.id).delete();
+        toast('Medicine removed.', 'info');
       });
+    });
+  } else {
+    const wrap = document.getElementById('medicine-reminder-content');
+    if (!wrap) return;
+    if (meds.length === 0) {
+      wrap.innerHTML = '<p class="empty-state">No medicines scheduled.</p>';
+      return;
+    }
+    
+    const today = todayDate();
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    
+    const sortedMeds = [...meds].sort((a,b) => (a.time || '00:00').localeCompare(b.time || '00:00'));
+    
+    let missedMed = null;
+    let nextMed = null;
+    
+    for (let m of sortedMeds) {
+      const isTaken = m.takenDates && m.takenDates.includes(today);
+      const [h, min] = (m.time || '00:00').split(':').map(Number);
+      const medMins = h * 60 + min;
+      
+      if (!isTaken) {
+        if (medMins < currentMins && !missedMed) missedMed = m;
+        else if (medMins >= currentMins && !nextMed) nextMed = m;
+      }
+    }
+    
+    let displayMed = missedMed || nextMed;
+    let isMissed = !!missedMed;
+    
+    if (!displayMed) {
+      wrap.innerHTML = `<div style="text-align:center;padding:24px 10px;color:var(--success);"><span style="font-size:32px">✅</span><br/><strong style="display:block;margin-top:8px">All caught up!</strong><span style="font-size:0.85rem;color:var(--txt-muted)">You've taken all your medicines for today.</span></div>`;
+      return;
+    }
+    
+    wrap.innerHTML = `
+      <div class="reminder-layout ${isMissed ? 'missed' : 'upcoming'}">
+        <div class="reminder-status">
+          <span class="status-icon">${isMissed ? '⚠️' : '🕒'}</span>
+          <span class="status-text">${isMissed ? 'Missed Medicine' : 'Upcoming Medicine'}</span>
+        </div>
+        <div class="reminder-details">
+          <div class="rem-name">${escHtml(displayMed.name)} <span class="rem-dosage">${escHtml(displayMed.dosage)}</span></div>
+          <div class="rem-time">${formatTime12h(displayMed.time)}</div>
+        </div>
+        <button class="btn btn-primary w-full" id="btn-mark-taken" data-id="${escHtml(displayMed.id)}">Mark as Taken</button>
+      </div>
+    `;
+    
+    document.getElementById('btn-mark-taken').addEventListener('click', (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      col('medicines').doc(displayMed.id).update({
+        takenDates: firebase.firestore.FieldValue.arrayUnion(todayDate())
+      });
+      toast('Medicine marked as taken!', 'success');
+      // No await needed, optimistic UI via immediate local snapshot
     });
   }
 }
@@ -733,7 +819,7 @@ function renderSnacks(snacks, role) {
       <div class="snack-item" data-id="${escHtml(s.id)}">
         <span style="font-size:16px;">🍽</span>
         <span class="snack-name">${escHtml(s.snackName)}</span>
-        <span class="snack-time">${escHtml(s.time)}</span>
+        <span class="snack-time">${formatTime12h(s.time)}</span>
         ${canEdit ? `<button class="snack-delete" data-id="${escHtml(s.id)}" title="Remove">🗑</button>` : ''}
       </div>`).join('')}
   </div>`;
@@ -753,35 +839,55 @@ function renderSnacks(snacks, role) {
 function renderWater(water, role) {
   const wrap = document.getElementById('water-content');
   if (!wrap) return;
-  const canEdit   = role === 'doctor' || role === 'caretaker';
+  const canEdit   = role === 'patient' || role === 'caretaker';
   const consumed  = water?.consumedAmount ?? 0;
   const target    = water?.dailyTarget    ?? 3000;
-  const pct       = Math.min((consumed / target) * 100, 100).toFixed(0);
+  let pct = (consumed / target) * 100;
+  if(pct > 100) pct = 100;
 
   wrap.innerHTML = `
-    <div class="water-stats">
+    <div class="water-stats" style="align-items:center;">
       <div class="water-amount">${consumed}<span>ml</span></div>
-      <div class="water-target">Target: <strong>${target}ml</strong></div>
+      <div class="water-target" style="text-align:right;">
+        <div style="font-size:0.75rem">Target: <strong>${target}ml</strong></div>
+        <div style="color:var(--primary);font-weight:700;font-size:1.1rem">${pct.toFixed(0)}%</div>
+      </div>
     </div>
-    <div class="progress-bar-wrap">
-      <div class="progress-bar-fill" style="width:${pct}%"></div>
+    <div class="progress-bar-wrap" style="height:14px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:12px 0 20px;">
+      <div class="progress-bar-fill" style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--primary));transition:width 0.4s cubic-bezier(0.16, 1, 0.3, 1);"></div>
     </div>
-    ${canEdit ? `<div class="water-actions">
-      <button class="btn btn-primary btn-sm" id="btn-add-water">＋ 250ml</button>
+    ${canEdit ? `<div class="water-actions" style="display:flex;gap:8px;justify-content:center;">
+      <button class="btn btn-ghost btn-sm" id="btn-reset-water" style="flex:1">Reset</button>
+      <button class="btn btn-primary btn-sm" id="btn-add-water-250" style="flex:1">＋ 250ml</button>
+      <button class="btn btn-primary btn-sm" id="btn-add-water-500" style="flex:1">＋ 500ml</button>
     </div>` : ''}`;
 
   if (canEdit) {
-    document.getElementById('btn-add-water').addEventListener('click', async () => {
+    const updateWater = (increment) => {
       const today = todayDate();
       const ref   = col('water').doc(today);
-      try {
-        if (water) {
-          await ref.update({ consumedAmount: firebase.firestore.FieldValue.increment(250) });
-        } else {
-          await ref.set({ consumedAmount: 250, dailyTarget: 3000, date: today, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-        }
-      } catch (e) { console.error(e); toast('Failed to update water.', 'error'); }
-    });
+      let newConsumed = increment === 0 ? 0 : consumed + increment;
+      let newPct = Math.min((newConsumed / target) * 100, 100);
+      
+      // Optimistic upate instantly
+      wrap.querySelector('.water-amount').innerHTML = `${newConsumed}<span>ml</span>`;
+      wrap.querySelector('.progress-bar-fill').style.width = `${newPct}%`;
+      wrap.querySelector('.water-target div:last-child').innerText = `${newPct.toFixed(0)}%`;
+
+      if (increment === 0) {
+         ref.set({ consumedAmount: 0, dailyTarget: target, date: today }, { merge: true });
+      } else {
+         if (water) {
+           ref.update({ consumedAmount: firebase.firestore.FieldValue.increment(increment) });
+         } else {
+           ref.set({ consumedAmount: increment, dailyTarget: target, date: today, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+         }
+      }
+    };
+
+    document.getElementById('btn-reset-water').addEventListener('click', () => updateWater(0));
+    document.getElementById('btn-add-water-250').addEventListener('click', () => updateWater(250));
+    document.getElementById('btn-add-water-500').addEventListener('click', () => updateWater(500));
   }
 }
 
@@ -790,11 +896,16 @@ function renderWater(water, role) {
 // ════════════════════════════════════════════
 
 async function saveBloodSugar() {
+  const valBtn = document.getElementById('btn-save-bs');
   const val  = parseFloat(document.getElementById('bs-value').value);
   const type = document.getElementById('bs-type').value.trim() || 'random';
   if (isNaN(val) || val <= 0) { toast('Enter a valid blood sugar value.', 'error'); return; }
+  
+  valBtn.disabled = true;
+  valBtn.textContent = 'Saving...';
+  
   try {
-    await col('bloodSugar').add({
+    col('bloodSugar').add({
       value: val, time: type, date: todayDate(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -803,6 +914,10 @@ async function saveBloodSugar() {
     document.getElementById('bs-form').style.display = 'none';
     toast('Blood sugar logged!', 'success');
   } catch (e) { console.error(e); toast('Failed to save.', 'error'); }
+  finally {
+    valBtn.disabled = false;
+    valBtn.textContent = 'Save';
+  }
 }
 
 async function saveDoctorPin() {
@@ -852,20 +967,18 @@ function showAddMedicineModal() {
   document.getElementById('med-name').focus();
   overlay.addEventListener('click', e => { if (e.target === overlay) removeModalOverlay(); });
   document.getElementById('med-cancel').addEventListener('click', removeModalOverlay);
-  document.getElementById('med-save').addEventListener('click', async () => {
+  document.getElementById('med-save').addEventListener('click', () => {
     const name       = document.getElementById('med-name').value.trim();
     const dosage     = document.getElementById('med-dosage').value.trim();
     const time       = document.getElementById('med-time').value.trim();
     const prescribed = document.getElementById('med-prescribed').checked;
     if (!name || !dosage || !time) { toast('Please fill all fields.', 'error'); return; }
-    try {
-      await col('medicines').add({
-        name, dosage, time, prescribedByDoctor: prescribed,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      removeModalOverlay();
-      toast('Medicine added!', 'success');
-    } catch (e) { console.error(e); toast('Failed to add medicine.', 'error'); }
+    col('medicines').add({
+      name, dosage, time, prescribedByDoctor: prescribed,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    removeModalOverlay();
+    toast('Medicine added!', 'success');
   });
 }
 
@@ -895,18 +1008,16 @@ function showEditFoodModal() {
     document.getElementById('food-breakfast').focus();
     overlay.addEventListener('click', e => { if (e.target === overlay) removeModalOverlay(); });
     document.getElementById('food-cancel').addEventListener('click', removeModalOverlay);
-    document.getElementById('food-save').addEventListener('click', async () => {
+    document.getElementById('food-save').addEventListener('click', () => {
       const breakfast = document.getElementById('food-breakfast').value.trim();
       const lunch     = document.getElementById('food-lunch').value.trim();
       const dinner    = document.getElementById('food-dinner').value.trim();
-      try {
-        await col('foods').doc(todayDate()).set(
-          { breakfast, lunch, dinner, date: todayDate(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-          { merge: true }
-        );
-        removeModalOverlay();
-        toast('Food plan updated!', 'success');
-      } catch (e) { console.error(e); toast('Failed to save food plan.', 'error'); }
+      col('foods').doc(todayDate()).set(
+        { breakfast, lunch, dinner, date: todayDate(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      removeModalOverlay();
+      toast('Food plan updated!', 'success');
     });
   }).catch(() => toast('Could not load food data.', 'error'));
 }
@@ -932,18 +1043,16 @@ function showAddSnackModal() {
   document.getElementById('snack-name-input').focus();
   overlay.addEventListener('click', e => { if (e.target === overlay) removeModalOverlay(); });
   document.getElementById('snack-cancel').addEventListener('click', removeModalOverlay);
-  document.getElementById('snack-save').addEventListener('click', async () => {
+  document.getElementById('snack-save').addEventListener('click', () => {
     const name = document.getElementById('snack-name-input').value.trim();
     const time = document.getElementById('snack-time-input').value.trim();
     if (!name) { toast('Enter a snack name.', 'error'); return; }
-    try {
-      await col('snacks').add({
-        snackName: name, time, date: todayDate(),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      removeModalOverlay();
-      toast('Snack added!', 'success');
-    } catch (e) { console.error(e); toast('Failed to add snack.', 'error'); }
+    col('snacks').add({
+      snackName: name, time, date: todayDate(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    removeModalOverlay();
+    toast('Snack added!', 'success');
   });
 }
 

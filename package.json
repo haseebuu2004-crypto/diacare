@@ -1,0 +1,17 @@
+{
+  "name": "diacare-web",
+  "version": "1.0.0",
+  "description": "DiaCare – Smart Diabetes Management Web App",
+  "main": "app.js",
+  "scripts": {
+    "start": "npx http-server . -p 3000",
+    "dev": "npx http-server . -p 3000 -c-1"
+  },
+  "keywords": [
+    "diabetes",
+    "health",
+    "pwa"
+  ],
+  "author": "",
+  "license": "ISC"
+}
